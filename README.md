@@ -40,7 +40,7 @@ If you use Gmail SMTP:
 ## Run once
 
 ```bash
-python schengen_slot_notifier.py
+python get_appointment_updates.py
 ```
 
 ## How filtering works
