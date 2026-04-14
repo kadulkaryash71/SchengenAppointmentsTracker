@@ -1,0 +1,49 @@
+name: Check Schengen slots
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write .env
+        run: |
+          cat > .env <<EOF
+          CITY_SLUG=${{ secrets.CITY_SLUG }}
+          VISA_TYPE=${{ secrets.VISA_TYPE }}
+          TARGET_URL=${{ secrets.TARGET_URL }}
+          COUNTRIES=${{ secrets.COUNTRIES }}
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          STATE_FILE=.state/schengen_state.json
+          LOG_LEVEL=INFO
+          EOF
+
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: .state
+          key: schengen-slot-state-${{ github.ref }}
+          restore-keys: |
+            schengen-slot-state-
+
+      - name: Run notifier
+        run: python schengen_slot_notifier.py
