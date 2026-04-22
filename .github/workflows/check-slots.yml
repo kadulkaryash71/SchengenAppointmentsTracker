@@ -33,17 +33,17 @@ jobs:
           SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM=${{ secrets.EMAIL_FROM }}
           EMAIL_TO=${{ secrets.EMAIL_TO }}
-          STATE_FILE=.state/schengen_state.json
+          STATE_FILE=.state/last_seen.json
           LOG_LEVEL=INFO
           EOF
 
       - name: Restore state cache
         uses: actions/cache@v4
         with:
-          path: .state
+          path: last_seen.json
           key: schengen-slot-state-${{ github.ref }}
           restore-keys: |
             schengen-slot-state-
 
       - name: Run notifier
-        run: python schengen_slot_notifier.py
+        run: python get_appointment_updates.py
