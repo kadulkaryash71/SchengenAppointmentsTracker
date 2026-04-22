@@ -29,7 +29,10 @@ USER_AGENT = (
 DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Z][a-z]{2}\b")
 SLOTS_RE = re.compile(r"\b\d+\s*\+\s*slots?\b", re.IGNORECASE)
 NO_AVAIL_RE = re.compile(r"\bNo availability\b", re.IGNORECASE)
+WAITLIST_RE = re.compile(r"\bWaitlist\s+Open\b", re.IGNORECASE)
 CHECKED_RE = re.compile(r"\bchecked\b", re.IGNORECASE)
+
+_STATUS_RANK = {"available": 2, "waitlist": 1, "unavailable": 0}
 
 def fetch_page_lines(url: str):
     resp = requests.get(
@@ -70,6 +73,7 @@ def looks_like_country(line: str) -> bool:
         "Tourist Visa",
         "Business Visa",
         "No availability",
+        "Waitlist Open",
         "notify me",
         "request it",
         "Email Alerts",
@@ -135,6 +139,18 @@ def parse_availability(lines):
                 i += 1
                 continue
 
+            # Waitlist row
+            if WAITLIST_RE.search(window) and CHECKED_RE.search(window):
+                rows.append({
+                    "country": country,
+                    "earliest": None,
+                    "status": "waitlist",
+                    "slots": None,
+                    "raw": window,
+                })
+                i += 1
+                continue
+
             # Unavailable row
             if NO_AVAIL_RE.search(window):
                 rows.append({
@@ -149,13 +165,13 @@ def parse_availability(lines):
 
         i += 1
 
-    # Deduplicate by country, preferring available rows
+    # Deduplicate by country, preferring higher-ranked status (available > waitlist > unavailable)
     deduped = {}
     for row in rows:
         key = row["country"].lower()
         if key not in deduped:
             deduped[key] = row
-        elif deduped[key]["status"] != "available" and row["status"] == "available":
+        elif _STATUS_RANK.get(row["status"], 0) > _STATUS_RANK.get(deduped[key]["status"], 0):
             deduped[key] = row
 
     parsed = list(deduped.values())
@@ -226,7 +242,7 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 def make_signature(row):
-    return f"{row['country']}|{row['earliest']}|{row['slots']}"
+    return f"{row['country']}|{row['status']}|{row['earliest']}|{row['slots']}"
 
 def get_new_rows(rows, state):
     seen = set(state.get("seen", []))
@@ -250,9 +266,10 @@ def send_email(subject, body, smtp_host, smtp_port, smtp_user, smtp_password, se
 def build_email_body(rows, page_url):
     lines = ["Slots found:\n"]
     for row in rows:
-        lines.append(
-            f"- {row['country']}: {row['earliest']} ({row['slots']})"
-        )
+        if row["status"] == "waitlist":
+            lines.append(f"- {row['country']}: Waitlist Open")
+        else:
+            lines.append(f"- {row['country']}: {row['earliest']} ({row['slots']})")
     lines.append(f"\nPage: {page_url}")
     return "\n".join(lines)
 
@@ -263,10 +280,11 @@ if __name__ == "__main__":
     try:
         PAGE_URL = "https://schengenappointments.com/in/dublin/tourism"
         lines = fetch_page_lines(PAGE_URL)
+        print(lines)
         logging.info("Fetched page")
 
         rows = parse_availability(lines)
-        filtered_rows = [r for r in rows if r["status"] == "available"]
+        filtered_rows = [r for r in rows if r["status"] in ("available", "waitlist")]
         logging.info("Filtered rows: %s", filtered_rows)
 
         state = load_state()
