@@ -43,6 +43,7 @@ def fetch_page_lines(url: str):
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
+    print(soup.prettify())
 
     lines = []
     for line in soup.get_text("\n").splitlines():
@@ -89,81 +90,75 @@ def looks_like_country(line: str) -> bool:
     if len(cleaned) > 30:
         return False
 
-    return bool(re.fullmatch(r"[A-Za-z][A-Za-z\s&()\-]+", cleaned))
+    # Country names always start with an uppercase letter.
+    # This rejects "minutes ago", "available", etc. produced by stripping digits from timestamp lines.
+    return bool(re.fullmatch(r"[A-Z][A-Za-z\s&()\-]+", cleaned))
+
+def _normalize_segment(segment: list) -> str:
+    """Join a segment of lines into a window string, merging split '1 +' / 'slots' pairs."""
+    normalized = []
+    j = 0
+    while j < len(segment):
+        if (
+            j + 1 < len(segment)
+            and re.fullmatch(r"\d+\s*\+", segment[j])
+            and segment[j + 1].strip().lower() == "slots"
+        ):
+            normalized.append(f"{segment[j]} slots")
+            j += 2
+        else:
+            normalized.append(segment[j])
+            j += 1
+    return " | ".join(normalized)
+
+
+def _country_indices(lines: list) -> list:
+    """Return indices of all lines that look like country names."""
+    return [i for i, line in enumerate(lines) if looks_like_country(line)]
+
 
 def parse_availability(lines):
+    indices = _country_indices(lines)
     rows = []
-    i = 0
 
-    while i < len(lines):
-        raw_country_line = lines[i]
+    for k, i in enumerate(indices):
+        country = strip_flags_and_icons(lines[i])
+        # Segment is strictly bounded by the next country line — no bleeding across rows.
+        end = indices[k + 1] if k + 1 < len(indices) else len(lines)
+        window = _normalize_segment(lines[i + 1:end])
+        print(country, window)
 
-        if looks_like_country(raw_country_line):
-            country = strip_flags_and_icons(raw_country_line)
+        date_match = DATE_RE.search(window)
+        slots_match = SLOTS_RE.search(window)
 
-            # Look at the next few lines because the page splits content across lines.
-            nearby_lines = lines[i + 1:i + 7]
+        if CHECKED_RE.search(window) and date_match and slots_match:
+            rows.append({
+                "country": country,
+                "earliest": date_match.group(0),
+                "status": "available",
+                "slots": slots_match.group(0),
+                "raw": window,
+            })
+            continue
 
-            # Normalize split slot text: "1 +" + "slots" => "1 + slots"
-            normalized_lines = []
-            j = 0
-            while j < len(nearby_lines):
-                current_line = nearby_lines[j]
+        if WAITLIST_RE.search(window) and CHECKED_RE.search(window):
+            rows.append({
+                "country": country,
+                "earliest": None,
+                "status": "waitlist",
+                "slots": None,
+                "raw": window,
+            })
+            continue
 
-                if (
-                    j + 1 < len(nearby_lines)
-                    and re.fullmatch(r"\d+\s*\+", current_line)
-                    and nearby_lines[j + 1].strip().lower() == "slots"
-                ):
-                    normalized_lines.append(f"{current_line} slots")
-                    j += 2
-                    continue
-
-                normalized_lines.append(current_line)
-                j += 1
-
-            window = " | ".join(normalized_lines)
-
-            # Available row
-            date_match = DATE_RE.search(window)
-            slots_match = SLOTS_RE.search(window)
-
-            if CHECKED_RE.search(window) and date_match and slots_match:
-                rows.append({
-                    "country": country,
-                    "earliest": date_match.group(0),
-                    "status": "available",
-                    "slots": slots_match.group(0),
-                    "raw": window,
-                })
-                i += 1
-                continue
-
-            # Waitlist row
-            if WAITLIST_RE.search(window) and CHECKED_RE.search(window):
-                rows.append({
-                    "country": country,
-                    "earliest": None,
-                    "status": "waitlist",
-                    "slots": None,
-                    "raw": window,
-                })
-                i += 1
-                continue
-
-            # Unavailable row
-            if NO_AVAIL_RE.search(window):
-                rows.append({
-                    "country": country,
-                    "earliest": None,
-                    "status": "unavailable",
-                    "slots": None,
-                    "raw": window,
-                })
-                i += 1
-                continue
-
-        i += 1
+        if NO_AVAIL_RE.search(window):
+            rows.append({
+                "country": country,
+                "earliest": None,
+                "status": "unavailable",
+                "slots": None,
+                "raw": window,
+            })
 
     # Deduplicate by country, preferring higher-ranked status (available > waitlist > unavailable)
     deduped = {}
@@ -184,50 +179,27 @@ def parse_availability(lines):
 
     return parsed
 
+
 def parse_available_rows(lines):
+    indices = _country_indices(lines)
     rows = []
-    i = 0
 
-    while i < len(lines):
-        raw_country_line = lines[i]
+    for k, i in enumerate(indices):
+        country = strip_flags_and_icons(lines[i])
+        end = indices[k + 1] if k + 1 < len(indices) else len(lines)
+        window = _normalize_segment(lines[i + 1:end])
 
-        if looks_like_country(raw_country_line):
-            country = strip_flags_and_icons(raw_country_line)
+        date_match = DATE_RE.search(window)
+        slots_match = SLOTS_RE.search(window)
 
-            nearby_lines = lines[i + 1:i + 7]
-
-            normalized_lines = []
-            j = 0
-            while j < len(nearby_lines):
-                current_line = nearby_lines[j]
-
-                if (
-                    j + 1 < len(nearby_lines)
-                    and re.fullmatch(r"\d+\s*\+", current_line)
-                    and nearby_lines[j + 1].strip().lower() == "slots"
-                ):
-                    normalized_lines.append(f"{current_line} slots")
-                    j += 2
-                    continue
-
-                normalized_lines.append(current_line)
-                j += 1
-
-            window = " | ".join(normalized_lines)
-
-            date_match = DATE_RE.search(window)
-            slots_match = SLOTS_RE.search(window)
-
-            if CHECKED_RE.search(window) and date_match and slots_match:
-                rows.append({
-                    "country": country,
-                    "earliest": date_match.group(0),
-                    "status": "available",
-                    "slots": slots_match.group(0),
-                    "raw": window,
-                })
-
-        i += 1
+        if CHECKED_RE.search(window) and date_match and slots_match:
+            rows.append({
+                "country": country,
+                "earliest": date_match.group(0),
+                "status": "available",
+                "slots": slots_match.group(0),
+                "raw": window,
+            })
 
     return rows
 
