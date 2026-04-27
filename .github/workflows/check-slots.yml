@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Ensure state directory exists
+        run: mkdir -p .state
+
       - name: Write .env
         run: |
           cat > .env <<EOF
@@ -40,10 +43,21 @@ jobs:
       - name: Restore state cache
         uses: actions/cache@v4
         with:
-          path: last_seen.json
-          key: schengen-slot-state-${{ github.ref }}
+          path: .state/last_seen.json
+          key: schengen-slot-state-${{ github.ref }}-${{ github.run_id }}
           restore-keys: |
+            schengen-slot-state-${{ github.ref }}-
             schengen-slot-state-
 
       - name: Run notifier
         run: python get_appointment_updates.py
+
+      - name: Debug state file
+        if: always()
+        run: |
+          echo "STATE_FILE from env:"
+          grep STATE_FILE .env || true
+          echo "Files found:"
+          find . -name "last_seen.json" -print
+          echo "State content:"
+          cat .state/last_seen.json || true

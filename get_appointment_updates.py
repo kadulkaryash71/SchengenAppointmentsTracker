@@ -203,7 +203,7 @@ def parse_available_rows(lines):
 
     return rows
 
-STATE_FILE = Path("last_seen.json")
+STATE_FILE = Path(os.getenv("STATE_FILE", "last_seen.json"))
 
 def load_state():
     if STATE_FILE.exists():
@@ -211,6 +211,7 @@ def load_state():
     return {"seen": []}
 
 def save_state(state):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 def make_signature(row):
