@@ -28,194 +28,128 @@ USER_AGENT = (
 
 DATE_RE = re.compile(r"\b\d{1,2}\s+[A-Z][a-z]{2}\b")
 SLOTS_RE = re.compile(r"\b\d+\s*\+\s*slots?\b", re.IGNORECASE)
-NO_AVAIL_RE = re.compile(r"\bNo availability\b", re.IGNORECASE)
 WAITLIST_RE = re.compile(r"\bWaitlist\s+Open\b", re.IGNORECASE)
 CHECKED_RE = re.compile(r"\bchecked\b", re.IGNORECASE)
 
-_STATUS_RANK = {"available": 2, "waitlist": 1, "unavailable": 0}
+COUNTRY_CODES = {
+    "Austria": "aut",
+    "Croatia": "hrv",
+    "Denmark": "dnk",
+    "Finland": "fin",
+    "Hungary": "hun",
+    "Iceland": "isl",
+    "Netherlands": "nld",
+}
 
-def fetch_page_lines(url: str):
+VFS_URL_TEMPLATE = "https://visa.vfsglobal.com/irl/en/{code}/book-an-appointment"
+DEFAULT_VFS_URL = "https://www.vfsglobal.com/en/individuals/index.html"
+
+
+def build_vfs_url(country: str) -> str:
+    country_code = COUNTRY_CODES.get(country)
+    return VFS_URL_TEMPLATE.format(code=country_code) if country_code else DEFAULT_VFS_URL
+
+
+def get_soup(url: str) -> BeautifulSoup:
     resp = requests.get(
         url,
         headers={"User-Agent": USER_AGENT},
         timeout=30,
     )
     resp.raise_for_status()
+    return BeautifulSoup(resp.text, "html.parser")
 
-    soup = BeautifulSoup(resp.text, "html.parser")
-    print(soup.prettify())
-
-    lines = []
-    for line in soup.get_text("\n").splitlines():
-        cleaned = " ".join(line.split())
-        if cleaned:
-            lines.append(cleaned)
-
-    return lines
 
 def strip_flags_and_icons(text: str) -> str:
-    # Keep letters, spaces, and a few safe punctuation chars.
-    # This removes flag emoji and bell icons from country lines.
     cleaned = re.sub(r"[^A-Za-z\s&()\-]", "", text)
     return " ".join(cleaned.split()).strip()
 
-def looks_like_country(line: str) -> bool:
-    cleaned = strip_flags_and_icons(line)
 
-    banned = {
-        "Dublin",
-        "Destination",
-        "Country",
-        "Earliest",
-        "Available",
-        "Apr",
-        "May",
-        "Jun",
-        "Tourist Visa",
-        "Business Visa",
-        "No availability",
-        "Waitlist Open",
-        "notify me",
-        "request it",
-        "Email Alerts",
-    }
+def get_available_slots(rows) -> list[dict]:
+    countries = []
 
-    if not cleaned or cleaned in banned:
-        return False
-
-    lowered = cleaned.lower()
-    if "checked" in lowered or "slot" in lowered or "availability" in lowered:
-        return False
-
-    if len(cleaned) > 30:
-        return False
-
-    # Country names always start with an uppercase letter.
-    # This rejects "minutes ago", "available", etc. produced by stripping digits from timestamp lines.
-    return bool(re.fullmatch(r"[A-Z][A-Za-z\s&()\-]+", cleaned))
-
-def _normalize_segment(segment: list) -> str:
-    """Join a segment of lines into a window string, merging split '1 +' / 'slots' pairs."""
-    normalized = []
-    j = 0
-    while j < len(segment):
-        if (
-            j + 1 < len(segment)
-            and re.fullmatch(r"\d+\s*\+", segment[j])
-            and segment[j + 1].strip().lower() == "slots"
-        ):
-            normalized.append(f"{segment[j]} slots")
-            j += 2
-        else:
-            normalized.append(segment[j])
-            j += 1
-    return " | ".join(normalized)
-
-
-def _country_indices(lines: list) -> list:
-    """Return indices of all lines that look like country names."""
-    return [i for i, line in enumerate(lines) if looks_like_country(line)]
-
-
-def parse_availability(lines):
-    indices = _country_indices(lines)
-    rows = []
-
-    for k, i in enumerate(indices):
-        country = strip_flags_and_icons(lines[i])
-        # Segment is strictly bounded by the next country line — no bleeding across rows.
-        end = indices[k + 1] if k + 1 < len(indices) else len(lines)
-        window = _normalize_segment(lines[i + 1:end])
-        print(country, window)
-
-        date_match = DATE_RE.search(window)
-        slots_match = SLOTS_RE.search(window)
-
-        if CHECKED_RE.search(window) and date_match and slots_match:
-            rows.append({
-                "country": country,
-                "earliest": date_match.group(0),
-                "status": "available",
-                "slots": slots_match.group(0),
-                "raw": window,
-            })
+    for row in rows[1:]:
+        th = row.find("th")
+        if th is None:
             continue
 
-        if WAITLIST_RE.search(window) and CHECKED_RE.search(window):
-            rows.append({
-                "country": country,
-                "earliest": None,
-                "status": "waitlist",
-                "slots": None,
-                "raw": window,
-            })
+        country = strip_flags_and_icons(th.get_text(strip=True))
+
+        cells = row.find_all("td")
+        if len(cells) <= 1:
             continue
 
-        if NO_AVAIL_RE.search(window):
-            rows.append({
-                "country": country,
-                "earliest": None,
-                "status": "unavailable",
-                "slots": None,
-                "raw": window,
-            })
+        availability_cell = cells[0]
+        availability_text = availability_cell.get_text(" ", strip=True)
 
-    # Deduplicate by country, preferring higher-ranked status (available > waitlist > unavailable)
-    deduped = {}
-    for row in rows:
-        key = row["country"].lower()
-        if key not in deduped:
-            deduped[key] = row
-        elif _STATUS_RANK.get(row["status"], 0) > _STATUS_RANK.get(deduped[key]["status"], 0):
-            deduped[key] = row
+        if "No availability" in availability_text:
+            continue
 
-    parsed = list(deduped.values())
+        earliest_span = availability_cell.find("span")
+        earliest = earliest_span.get_text(strip=True) if earliest_span else None
 
-    if not parsed:
-        raise RuntimeError(
-            "Could not parse any availability rows. "
-            "Fetched page successfully, but line structure differed from expected."
+        has_checked_date = (
+            CHECKED_RE.search(availability_text)
+            and DATE_RE.search(availability_text)
         )
 
-    return parsed
+        if has_checked_date:
+            status = "available"
+        elif WAITLIST_RE.search(availability_text):
+            status = "waitlist"
+        else:
+            status = None
+
+        slots = sum(
+            1
+            for cell in cells[1:]
+            if SLOTS_RE.search(cell.get_text())
+        )
+
+        countries.append({
+            "country": country,
+            "status": status,
+            "earliest": earliest,
+            "slots": slots,
+        })
+
+    return countries
 
 
-def parse_available_rows(lines):
-    indices = _country_indices(lines)
-    rows = []
+def fetch_slots_from_table(url: str) -> list[dict]:
+    soup = get_soup(url)
 
-    for k, i in enumerate(indices):
-        country = strip_flags_and_icons(lines[i])
-        end = indices[k + 1] if k + 1 < len(indices) else len(lines)
-        window = _normalize_segment(lines[i + 1:end])
+    table = soup.find("table")
+    if table is None:
+        raise RuntimeError(
+            "No table found on the page. "
+            "The site layout may have changed or the request was blocked."
+        )
 
-        date_match = DATE_RE.search(window)
-        slots_match = SLOTS_RE.search(window)
+    rows = table.find_all("tr")
+    return get_available_slots(rows)
 
-        if CHECKED_RE.search(window) and date_match and slots_match:
-            rows.append({
-                "country": country,
-                "earliest": date_match.group(0),
-                "status": "available",
-                "slots": slots_match.group(0),
-                "raw": window,
-            })
-
-    return rows
 
 STATE_FILE = Path(os.getenv("STATE_FILE", "last_seen.json"))
 
+
 def load_state():
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        try:
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            logging.warning("State file was corrupted. Starting fresh.")
     return {"seen": []}
+
 
 def save_state(state):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
+
 def make_signature(row):
     return f"{row['country']}|{row['status']}|{row['earliest']}|{row['slots']}"
+
 
 def get_new_rows(rows, state):
     seen = set(state.get("seen", []))
@@ -223,28 +157,42 @@ def get_new_rows(rows, state):
     new = [r for r in rows if make_signature(r) not in seen]
     return new, {"seen": list(current)}
 
-def send_email(subject, body, smtp_host, smtp_port, smtp_user, smtp_password, sender, recipient):
+
+def send_email(subject, body, smtp_host, smtp_port, smtp_user, smtp_password, sender, to_recipients=None, bcc_recipients=None):
+    to_recipients = to_recipients or []
+    bcc_recipients = bcc_recipients or []
+
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = recipient
+    msg["To"] = ", ".join(to_recipients)
+
+    all_recipients = to_recipients + bcc_recipients
 
     logging.info("Connecting to SMTP server...")
     with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
         server.starttls()
         server.login(smtp_user, smtp_password)
-        server.send_message(msg)
+        server.send_message(msg, to_addrs=all_recipients)
         logging.info("Email sent successfully")
-    
+
+
 def build_email_body(rows, page_url):
     lines = ["Slots found:\n"]
     for row in rows:
         if row["status"] == "waitlist":
             lines.append(f"- {row['country']}: Waitlist Open")
         else:
-            lines.append(f"- {row['country']}: {row['earliest']} ({row['slots']})")
-    lines.append(f"\nPage: {page_url}")
+            lines.append(f"- {row['country']}: {row['earliest']} ({row['slots']} slot(s) available)")
+        lines.append(f"\t- Book appointment at: {build_vfs_url(row['country'])}")
+
+    lines.append(
+        "\n☕ Found this useful? "
+        "Support the project: "
+        "https://buymeacoffee.com/kadulkaryash71"
+    )
     return "\n".join(lines)
+
 
 if __name__ == "__main__":
     start = time.time()
@@ -252,21 +200,31 @@ if __name__ == "__main__":
 
     try:
         PAGE_URL = "https://schengenappointments.com/in/dublin/tourism"
-        lines = fetch_page_lines(PAGE_URL)
-        print(lines)
-        logging.info("Fetched page")
 
-        rows = parse_availability(lines)
-        filtered_rows = [r for r in rows if r["status"] in ("available", "waitlist")]
-        logging.info("Filtered rows: %s", filtered_rows)
+        rows = fetch_slots_from_table(PAGE_URL)
+        logging.info("Fetched rows: %s", rows)
 
         state = load_state()
-        new_rows, new_state = get_new_rows(filtered_rows, state)
+        new_rows, new_state = get_new_rows(rows, state)
         logging.info("New rows: %s", new_rows)
 
         if new_rows:
             body = build_email_body(new_rows, PAGE_URL)
             logging.info("About to send email")
+
+            to_raw = os.getenv("EMAIL_TO", "")
+            to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
+
+            bcc_raw = os.getenv("EMAIL_BCC", "")
+            bcc_list = [addr.strip() for addr in bcc_raw.split(",") if addr.strip()]
+
+            if not to_list:
+                if not bcc_list:
+                    raise RuntimeError(
+                        "No recipients configured. Set EMAIL_TO or EMAIL_BCC."
+                    )
+                to_list.append(bcc_list.pop(0))
+
             send_email(
                 subject="Schengen appointment slots available",
                 body=body,
@@ -275,7 +233,8 @@ if __name__ == "__main__":
                 smtp_user=os.environ["SMTP_USER"],
                 smtp_password=os.environ["SMTP_PASSWORD"],
                 sender=os.environ["EMAIL_FROM"],
-                recipient=os.environ["EMAIL_TO"],
+                to_recipients=to_list,
+                bcc_recipients=bcc_list,
             )
             logging.info("Email sent")
         else:

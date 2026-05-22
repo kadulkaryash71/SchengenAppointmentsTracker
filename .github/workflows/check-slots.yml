@@ -36,6 +36,7 @@ jobs:
           SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM=${{ secrets.EMAIL_FROM }}
           EMAIL_TO=${{ vars.EMAIL_TO }}
+          EMAIL_BCC=${{ vars.EMAIL_BCC }}
           STATE_FILE=.state/last_seen.json
           LOG_LEVEL=INFO
           EOF
