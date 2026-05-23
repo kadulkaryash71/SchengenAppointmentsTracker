@@ -131,6 +131,7 @@ def fetch_slots_from_table(url: str) -> list[dict]:
 
 
 STATE_FILE = Path(os.getenv("STATE_FILE", "last_seen.json"))
+BCC_STATE_FILE = Path(os.getenv("BCC_STATE_FILE", "last_bcc.json"))
 
 
 def load_state():
@@ -145,6 +146,68 @@ def load_state():
 def save_state(state):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def load_bcc_state() -> str:
+    """Return the last known EMAIL_BCC string, or '' if never stored."""
+    if BCC_STATE_FILE.exists():
+        try:
+            return json.loads(BCC_STATE_FILE.read_text(encoding="utf-8")).get("bcc", "")
+        except json.JSONDecodeError:
+            logging.warning("BCC state file was corrupted. Starting fresh.")
+    return ""
+
+
+def save_bcc_state(bcc: str) -> None:
+    BCC_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BCC_STATE_FILE.write_text(json.dumps({"bcc": bcc}, indent=2), encoding="utf-8")
+
+
+def check_bcc_change() -> None:
+    current_bcc = os.getenv("EMAIL_BCC", "").strip()
+    previous_bcc = load_bcc_state()
+
+    if not previous_bcc:
+        logging.info("No previous BCC state found. Storing current value.")
+        save_bcc_state(current_bcc)
+        return
+
+    if current_bcc == previous_bcc:
+        logging.info("EMAIL_BCC unchanged.")
+        return
+
+    logging.info("EMAIL_BCC changed. Sending notification.")
+
+    body = (
+        "The BCC mailing list for Schengen slot notifications has been updated.\n\n"
+        f"Previous: {previous_bcc}\n"
+        f"Current:  {current_bcc}\n\n"
+        "You are receiving this because you are subscribed to Schengen slot alerts."
+    )
+
+    to_raw = os.getenv("EMAIL_TO", "")
+    to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
+    new_bcc_list = [addr.strip() for addr in current_bcc.split(",") if addr.strip()]
+
+    if not to_list and not new_bcc_list:
+        raise RuntimeError("No recipients configured. Set EMAIL_TO or EMAIL_BCC.")
+    if not to_list:
+        to_list.append(new_bcc_list.pop(0))
+
+    send_email(
+        subject="Schengen bot: BCC mailing list updated",
+        body=body,
+        smtp_host=os.environ["SMTP_HOST"],
+        smtp_port=int(os.environ["SMTP_PORT"]),
+        smtp_user=os.environ["SMTP_USER"],
+        smtp_password=os.environ["SMTP_PASSWORD"],
+        sender=os.environ["EMAIL_FROM"],
+        to_recipients=to_list,
+        bcc_recipients=new_bcc_list,
+    )
+
+    save_bcc_state(current_bcc)
+    logging.info("BCC state updated.")
 
 
 def make_signature(row):
@@ -194,54 +257,62 @@ def build_email_body(rows, page_url):
     return "\n".join(lines)
 
 
+def _run_slot_check():
+    PAGE_URL = "https://schengenappointments.com/in/dublin/tourism"
+
+    rows = fetch_slots_from_table(PAGE_URL)
+    logging.info("Fetched rows: %s", rows)
+
+    state = load_state()
+    new_rows, new_state = get_new_rows(rows, state)
+    logging.info("New rows: %s", new_rows)
+
+    if new_rows:
+        body = build_email_body(new_rows, PAGE_URL)
+        logging.info("About to send email")
+
+        to_raw = os.getenv("EMAIL_TO", "")
+        to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
+
+        bcc_raw = os.getenv("EMAIL_BCC", "")
+        bcc_list = [addr.strip() for addr in bcc_raw.split(",") if addr.strip()]
+
+        if not to_list:
+            if not bcc_list:
+                raise RuntimeError(
+                    "No recipients configured. Set EMAIL_TO or EMAIL_BCC."
+                )
+            to_list.append(bcc_list.pop(0))
+
+        send_email(
+            subject="Schengen appointment slots available",
+            body=body,
+            smtp_host=os.environ["SMTP_HOST"],
+            smtp_port=int(os.environ["SMTP_PORT"]),
+            smtp_user=os.environ["SMTP_USER"],
+            smtp_password=os.environ["SMTP_PASSWORD"],
+            sender=os.environ["EMAIL_FROM"],
+            to_recipients=to_list,
+            bcc_recipients=bcc_list,
+        )
+        logging.info("Email sent")
+    else:
+        logging.info("No new slots found")
+
+    save_state(new_state)
+    logging.info("State saved")
+
+
 if __name__ == "__main__":
     start = time.time()
     logging.info("Task started")
 
     try:
-        PAGE_URL = "https://schengenappointments.com/in/dublin/tourism"
-
-        rows = fetch_slots_from_table(PAGE_URL)
-        logging.info("Fetched rows: %s", rows)
-
-        state = load_state()
-        new_rows, new_state = get_new_rows(rows, state)
-        logging.info("New rows: %s", new_rows)
-
-        if new_rows:
-            body = build_email_body(new_rows, PAGE_URL)
-            logging.info("About to send email")
-
-            to_raw = os.getenv("EMAIL_TO", "")
-            to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
-
-            bcc_raw = os.getenv("EMAIL_BCC", "")
-            bcc_list = [addr.strip() for addr in bcc_raw.split(",") if addr.strip()]
-
-            if not to_list:
-                if not bcc_list:
-                    raise RuntimeError(
-                        "No recipients configured. Set EMAIL_TO or EMAIL_BCC."
-                    )
-                to_list.append(bcc_list.pop(0))
-
-            send_email(
-                subject="Schengen appointment slots available",
-                body=body,
-                smtp_host=os.environ["SMTP_HOST"],
-                smtp_port=int(os.environ["SMTP_PORT"]),
-                smtp_user=os.environ["SMTP_USER"],
-                smtp_password=os.environ["SMTP_PASSWORD"],
-                sender=os.environ["EMAIL_FROM"],
-                to_recipients=to_list,
-                bcc_recipients=bcc_list,
-            )
-            logging.info("Email sent")
+        mode = os.getenv("RUN_MODE", "slots")
+        if mode == "bcc-check":
+            check_bcc_change()
         else:
-            logging.info("No new slots found")
-
-        save_state(new_state)
-        logging.info("State saved")
+            _run_slot_check()
 
     except Exception:
         logging.exception("Task failed")

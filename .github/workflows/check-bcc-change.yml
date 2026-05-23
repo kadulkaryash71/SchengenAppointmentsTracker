@@ -1,0 +1,47 @@
+name: Check BCC variable change
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  check-bcc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write .env
+        run: |
+          cat > .env <<EOF
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_TO=${{ vars.EMAIL_TO }}
+          EMAIL_BCC=${{ vars.EMAIL_BCC }}
+          BCC_STATE_FILE=last_bcc.json
+          RUN_MODE=bcc-check
+          LOG_LEVEL=INFO
+          EOF
+
+      - name: Restore BCC state cache
+        uses: actions/cache@v4
+        with:
+          path: last_bcc.json
+          key: schengen-bcc-state-${{ github.run_id }}
+          restore-keys: |
+            schengen-bcc-state-
+
+      - name: Run BCC change check
+        run: python get_appointment_updates.py
