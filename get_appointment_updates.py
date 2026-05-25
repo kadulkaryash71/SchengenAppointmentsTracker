@@ -178,17 +178,23 @@ def check_bcc_change() -> None:
 
     logging.info("EMAIL_BCC changed. Sending notification.")
 
-    body = (
-        "The BCC mailing list for Schengen slot notifications has been updated.\n\n"
-        f"Previous: {previous_bcc}\n"
-        f"Current:  {current_bcc}\n\n"
-        "You are receiving this because you are subscribed to Schengen slot alerts."
-    )
+
+    previous_bcc_list = [addr.strip() for addr in previous_bcc.split(",") if addr.strip()]
 
     to_raw = os.getenv("EMAIL_TO", "")
     to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
-    new_bcc_list = [addr.strip() for addr in current_bcc.split(",") if addr.strip()]
+    new_bcc_list = [addr.strip() for addr in current_bcc.split(",") if addr.strip() and not addr.strip() in previous_bcc_list]
 
+    body = (
+        "Welcome! 🎉\n\n"
+        "You've been added to the Schengen visa appointment alert list for Dublin.\n\n"
+        "From now on, you'll receive an email as soon as a new appointment slot "
+        "becomes available — so you can book before it's gone.\n\n"
+        "No action is needed on your end. Just keep an eye on your inbox!\n\n"
+        "Good luck with your visa application. We hope you get a slot soon. ✈️\n\n"
+        "— 🤖 Schengen Slot Bot"
+    )
+    
     if not to_list and not new_bcc_list:
         raise RuntimeError("No recipients configured. Set EMAIL_TO or EMAIL_BCC.")
     if not to_list:
