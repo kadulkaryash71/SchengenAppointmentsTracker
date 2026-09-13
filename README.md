@@ -43,6 +43,22 @@ If you use Gmail SMTP:
 python get_appointment_updates.py
 ```
 
+## Subscription API (local)
+
+`pages/index.html` and `pages/tos.html` are served by the same small FastAPI backend that handles subscriptions —
+there's no separate static hosting step. It stores subscribers in memory (no database yet — hosting/deployment of
+this API itself is still an open decision). Run it locally:
+
+```bash
+uvicorn api.main:app --reload --port 8000
+```
+
+Then visit `http://127.0.0.1:8000/api/index/` for the sign-up page (`/api/tos/` for the terms page). No template
+engine is used — the HTML files are static and are returned as-is; only `pages/assets/` (CSS) is served via a
+`StaticFiles` mount at its existing `/pages/assets/...` path. The form's `API_ENDPOINT` points at
+`http://127.0.0.1:8000/api/subscribe`. `GET /api/subscribers` is a debug-only endpoint for inspecting what's been
+stored.
+
 ## How filtering works
 
 - `CITY_SLUG=dublin` with `VISA_TYPE=tourism` checks `https://schengenappointments.com/in/dublin/tourism`

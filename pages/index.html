@@ -86,20 +86,20 @@
                         style="margin-top:10px;">
                 </div>
 
-                <!-- <div class="field">
+                <div class="field">
                     <label for="visa-type">Visa type</label>
                     <select id="visa-type" name="visa_type">
-                        <option value="Tourist">Tourist</option>
+                        <option value="Tourist" selected>Tourist</option>
                         <option value="Business">Business</option>
                         <option value="Student">Student</option>
                         <option value="Other">Other</option>
                     </select>
-                </div> -->
+                </div>
 
                 <div class="consent">
                     <input type="checkbox" id="consent" name="consent" required>
                     <label for="consent">I agree to receive automated appointment alerts at the contact details above,
-                        and I've read the <a href="/pages/tos.html" target="_blank" rel="noopener">Terms &amp; Privacy
+                        and I've read the <a href="/api/tos/" target="_blank" rel="noopener">Terms &amp; Privacy
                             Notice</a>.</label>
                 </div>
 
@@ -112,14 +112,15 @@
             <p>This is an independent tool and is not affiliated with, endorsed by, or connected to VFS Global or any
                 embassy or consulate. It monitors publicly visible appointment pages on a best-effort basis and can't
                 guarantee slot accuracy or availability.</p>
-            <p>Read the <a href="/pages/tos.html">Terms &amp; Privacy Notice</a>.</p>
+            <p>Read the <a href="/api/tos/">Terms &amp; Privacy Notice</a>.</p>
         </footer>
 
     </div>
 
     <script>
-        // TODO: point this at the serverless function once it's deployed (step 2).
-        const API_ENDPOINT = "https://your-function-url.example.com/api/subscribe";
+        // TODO: point this at the deployed API once hosting is decided.
+        // Currently a local FastAPI server (see README.md "Subscription API (local)").
+        const API_ENDPOINT = "http://127.0.0.1:8000/api/subscribe";
 
         const form = document.getElementById('signup-form');
         const statusMsg = document.getElementById('status-msg');
