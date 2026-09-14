@@ -1,14 +1,14 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class SubscribeRequest(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     telegram: Optional[str] = None
-    countries: List[str] = Field(..., min_length=1)
+    countries: List[str] = None
     visa_type: Optional[str] = "Tourism"
     consented_at: datetime
 

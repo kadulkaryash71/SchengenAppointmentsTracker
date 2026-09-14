@@ -25,12 +25,12 @@ app.add_middleware(
 app.mount("/pages/assets", StaticFiles(directory=PAGES_DIR / "assets"), name="page-assets")
 
 
-@app.get("/api/index/", response_class=HTMLResponse)
+@app.get("/index", response_class=HTMLResponse)
 def render_index():
     return (PAGES_DIR / "index.html").read_text(encoding="utf-8")
 
 
-@app.get("/api/tos/", response_class=HTMLResponse)
+@app.get("/terms-of-service", response_class=HTMLResponse)
 def render_tos():
     return (PAGES_DIR / "tos.html").read_text(encoding="utf-8")
 
@@ -43,7 +43,7 @@ def subscribe(payload: SubscribeRequest):
     return SubscribeResponse(email=payload.email)
 
 
-# Debug-only: lets us verify stored subscribers without a DB. Not linked from the frontend.
+# Debug-only: lets us inspect stored subscribers. Not linked from the frontend.
 @app.get("/api/subscribers")
 def subscribers():
-    return [s.to_dict() for s in list_subscribers()]
+    return list_subscribers()

@@ -16,29 +16,6 @@
 <body>
     <div class="page">
 
-        <!-- <section class="board" aria-label="Example status board">
-            <div class="board-head">
-                <span>ROUTE</span>
-                <span>STATUS</span>
-            </div>
-            <div class="row waiting">
-                <span class="dest">Netherlands</span>
-                <span class="type">Tourist</span>
-                <span class="status">Waiting</span>
-            </div>
-            <div class="row waiting">
-                <span class="dest">Denmark</span>
-                <span class="type">Tourist</span>
-                <span class="status">Waiting</span>
-            </div>
-            <div class="row open">
-                <span class="dest">Iceland</span>
-                <span class="type">Tourist</span>
-                <span class="status">Slot open</span>
-            </div>
-        </section>
-        <p class="board-caption">Example only — shows what your alert looks like the moment a slot opens.</p> -->
-
         <section class="pitch">
             <h1>Know the moment a Schengen slot opens in Dublin.</h1>
             <p>We check VFS on your behalf every few minutes and message you the second an appointment or waitlist spot
@@ -55,51 +32,52 @@
             <form id="signup-form" novalidate>
 
                 <div class="field">
-                    <label for="email">Email</label>
+                    <label for="email">Email <span class="required">*</span></label>
                     <input type="email" id="email" name="email" placeholder="you@example.com" required>
                 </div>
 
-                <div class="two-col">
+                <!-- <div class="two-col">
                     <div class="field">
-                        <label for="phone">WhatsApp number</label>
+                        <label for="phone">WhatsApp number 
+                            <span class="optional">(Optional)</span>
+                        </label>
                         <input type="tel" id="phone" name="phone" placeholder="+353 8X XXX XXXX">
-                        <span class="hint">Optional — fill in for WhatsApp alerts</span>
                     </div>
                     <div class="field">
-                        <label for="telegram">Telegram username</label>
+                        <label for="telegram">Telegram username <span class="optional">(Optional)</span>
+                        </label>
                         <input type="text" id="telegram" name="telegram" placeholder="@yourhandle">
-                        <span class="hint">Optional — fill in for Telegram alerts</span>
                     </div>
-                </div>
-
-                <div class="field">
+                </div> -->
+                <!-- <div class="field">
+                    <small class="hint">
+                        [Note: We are still working on WhatsApp and Telegram updates. 
+                        You will be notified as they become available.]
+                    </small>
+                </div> -->
+                
+                <!-- <div class="field">
                     <label>Your preferred countries</label>
-                    <span class="hint">Which countries are you applying to?</span>
 
                     <div class="check-grid">
-                        <label class="check-item"><input type="checkbox" name="country" value="Netherlands">
-                            Netherlands</label>
+                        <label class="check-item"><input type="checkbox" name="country" value="Austria"> Austria</label>
+                        <label class="check-item"><input type="checkbox" name="country" value="Croatia"> Croatia</label>
                         <label class="check-item"><input type="checkbox" name="country" value="Denmark"> Denmark</label>
+                        <label class="check-item"><input type="checkbox" name="country" value="Finland"> Finland</label>
+                        <label class="check-item"><input type="checkbox" name="country" value="Hungary"> Hungary</label>
                         <label class="check-item"><input type="checkbox" name="country" value="Iceland"> Iceland</label>
+                        <label class="check-item"><input type="checkbox" name="country" value="Netherlands"> Netherlands</label>
                     </div>
                     <input type="text" id="country-other" name="country_other" placeholder="Other country (optional)"
                         style="margin-top:10px;">
-                </div>
-
-                <div class="field">
-                    <label for="visa-type">Visa type</label>
-                    <select id="visa-type" name="visa_type">
-                        <option value="Tourist" selected>Tourist</option>
-                        <option value="Business">Business</option>
-                        <option value="Student">Student</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
+                    <p class="optional">[Note: You will be notified for all the available countries regardless of your choices]</p>
+                    
+                </div> -->
 
                 <div class="consent">
                     <input type="checkbox" id="consent" name="consent" required>
                     <label for="consent">I agree to receive automated appointment alerts at the contact details above,
-                        and I've read the <a href="/api/tos/" target="_blank" rel="noopener">Terms &amp; Privacy
+                        and I've read the <a href="/terms-of-service/" target="_blank" rel="noopener">Terms &amp; Privacy
                             Notice</a>.</label>
                 </div>
 
@@ -112,15 +90,15 @@
             <p>This is an independent tool and is not affiliated with, endorsed by, or connected to VFS Global or any
                 embassy or consulate. It monitors publicly visible appointment pages on a best-effort basis and can't
                 guarantee slot accuracy or availability.</p>
-            <p>Read the <a href="/api/tos/">Terms &amp; Privacy Notice</a>.</p>
+            <p>Read the <a href="/terms-of-service/">Terms &amp; Privacy Notice</a>.</p>
         </footer>
 
     </div>
 
     <script>
-        // TODO: point this at the deployed API once hosting is decided.
-        // Currently a local FastAPI server (see README.md "Subscription API (local)").
-        const API_ENDPOINT = "http://127.0.0.1:8000/api/subscribe";
+        // Relative path: resolves against whatever origin served this page (localhost,
+        // LAN IP, or a real domain later), instead of hardcoding a host.
+        const API_ENDPOINT = "/api/subscribe";
 
         const form = document.getElementById('signup-form');
         const statusMsg = document.getElementById('status-msg');
@@ -133,20 +111,20 @@
 
             const email = document.getElementById('email').value.trim();
             const consent = document.getElementById('consent').checked;
-            const countries = Array.from(form.querySelectorAll('input[name="country"]:checked')).map(el => el.value);
-            const otherCountry = document.getElementById('country-other').value.trim();
-            if (otherCountry) countries.push(otherCountry);
+            // const countries = Array.from(form.querySelectorAll('input[name="country"]:checked')).map(el => el.value);
+            // const otherCountry = document.getElementById('country-other').value.trim();
+            // if (otherCountry) countries.push(otherCountry);
 
             if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 statusMsg.textContent = 'Enter a valid email address.';
                 statusMsg.className = 'error';
                 return;
             }
-            if (countries.length === 0) {
-                statusMsg.textContent = 'Pick at least one country to track.';
-                statusMsg.className = 'error';
-                return;
-            }
+            // if (countries.length === 0) {
+            //     statusMsg.textContent = 'Pick at least one country to track.';
+            //     statusMsg.className = 'error';
+            //     return;
+            // }
             if (!consent) {
                 statusMsg.textContent = 'Please agree to the Terms & Privacy Notice to continue.';
                 statusMsg.className = 'error';
@@ -155,10 +133,9 @@
 
             const payload = {
                 email,
-                phone: document.getElementById('phone').value.trim(),
-                telegram: document.getElementById('telegram').value.trim(),
-                countries,
-                visa_type: document.getElementById('visa-type').value,
+                // phone: document.getElementById('phone').value.trim(),
+                // telegram: document.getElementById('telegram').value.trim(),
+                // countries,
                 consented_at: new Date().toISOString()
             };
 
@@ -172,11 +149,11 @@
                     body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error('Request failed');
-                statusMsg.textContent = "You're on the list — we'll email you the moment a slot opens.";
+                statusMsg.textContent = "🎉 You're on the list — we'll email you the moment a slot opens.";
                 statusMsg.className = 'success';
                 form.reset();
             } catch (err) {
-                statusMsg.textContent = "Couldn't reach the sign-up service. Please try again shortly.";
+                statusMsg.textContent = "Couldn't reach the sign-up service. You are possibly already subscribed.";
                 statusMsg.className = 'error';
             } finally {
                 submitBtn.disabled = false;

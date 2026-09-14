@@ -74,8 +74,15 @@ uvicorn api.main:app --reload --port 8000
 - `api/models.py` — `SubscribeRequest`/`SubscribeResponse` Pydantic models. `visa_type` defaults to `"Tourism"` if
   omitted/blank (the frontend's `#visa-type` select generally tracks Dublin-tourism appointments, so this is
   mostly a fallback).
-- `api/store.py` — a `Subscription` class (mirrors `db_utils.py`'s `User`/`Appointment` `to_dict()` style) held in
-  a plain in-memory list. Storage is intentionally not persistent yet — nothing survives a server restart.
+- `api/store.py` — a `Subscription` class: the API-facing serializer between `SubscribeRequest` and persistence.
+  `add_subscriber`/`find_by_email`/`list_subscribers` delegate straight through to `api/db.py`.
+- `api/db.py` — self-contained MongoDB layer (own `MongoClient`, own `User` entity, own CRUD), independent of
+  `db_utils.py` (see below). `User` holds the full subscription shape (email, phone, telegram, countries,
+  visa_type, consented_at) plus an app-generated `user_id` (uuid4 hex) written explicitly as the document's `_id`
+  — avoids MongoDB's default `ObjectId`, which isn't plain-JSON-serializable, mattering for `/api/subscribers`.
+  `users` has a unique index on `email` (DB-level duplicate protection, alongside the pre-check in `main.py`).
+  Connects via `DB_URI` (falls back to `mongodb://localhost:27017/` if unset). An `Appointment` entity/collection
+  is planned but not yet built.
 - `api/main.py` —
   - `POST /api/subscribe` (409 on duplicate email) and a debug-only `GET /api/subscribers`.
   - `GET /api/index/` and `GET /api/tos/` return `pages/index.html`/`pages/tos.html` verbatim as
@@ -89,11 +96,11 @@ uvicorn api.main:app --reload --port 8000
 Hosting/deployment of this API (and therefore the pages it now serves) is still an open decision — nothing here
 assumes a specific target (no Docker/serverless config exists).
 
-### Database layer (`db_utils.py`)
+### Legacy `db_utils.py`
 
-`db_utils.py` (defines `User`/`Appointment` model classes and a `UserDatabase` (pymongo-backed) for persisting
-subscriber emails to MongoDB) is still not imported by any other file. It's scaffolding for a future move from the
-in-memory `api/store.py` list to real persistence — not yet integrated with `get_appointment_updates.py` or `api/`.
+`db_utils.py` (repo root) defines its own `User`/`Appointment` classes and a `UserDatabase` (pymongo-backed). It
+predates and is unrelated to `api/db.py` — not imported by `api/` or `get_appointment_updates.py`, left as-is.
+The active MongoDB layer for the subscription flow is `api/db.py`, described above.
 
 ## Configuration
 

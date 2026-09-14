@@ -29,7 +29,7 @@
             color: var(--ink);
             font-family: 'Inter', -apple-system, sans-serif;
             line-height: 1.55;
-            padding: 48px 20px 80px;
+            padding: 20px;
         }
 
         .page {
@@ -159,7 +159,7 @@
         /* ---------- Pitch ---------- */
 
         .pitch {
-            margin: 44px 0 36px;
+            margin: 24px 0 18px;
         }
 
         .pitch h1 {
@@ -245,13 +245,26 @@
             font-weight: 500;
             margin-bottom: 6px;
         }
-
+        
         .field .hint {
             display: block;
             font-size: 12px;
             color: var(--muted);
             font-weight: 400;
             margin-top: 4px;
+        }
+        
+        .field .required {
+            color: var(--amber);
+        }
+
+        .field .optional {
+            content: "(Optional)";
+            display: inline-block;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 10px;
+            color: var(--muted);
+            font-weight: 400;
         }
 
         input[type="email"],

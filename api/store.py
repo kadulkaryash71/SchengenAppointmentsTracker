@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+from api import db
 from api.models import SubscribeRequest
 
 # For serialization to JSON
@@ -29,11 +30,8 @@ class Subscription:
         return f"Subscription(email={self.email}, countries={self.countries})"
 
 
-_subscribers: List[Subscription] = []
-
-
-def find_by_email(email: str) -> Optional[Subscription]:
-    return next((s for s in _subscribers if s.email == email), None)
+def find_by_email(email: str) -> Optional[dict]:
+    return db.get_user_by_email(email)
 
 
 def add_subscriber(payload: SubscribeRequest) -> Subscription:
@@ -45,9 +43,20 @@ def add_subscriber(payload: SubscribeRequest) -> Subscription:
         visa_type=payload.visa_type,
         consented_at=payload.consented_at,
     )
-    _subscribers.append(subscription)
+    user = db.User(
+        email=subscription.email,
+        phone=subscription.phone,
+        telegram=subscription.telegram,
+        countries=subscription.countries,
+        visa_type=subscription.visa_type,
+        consented_at=subscription.consented_at,
+    )
+
+    # TODO: if user exists: update user details
+    
+    db.create_user(user)
     return subscription
 
 
-def list_subscribers() -> List[Subscription]:
-    return list(_subscribers)
+def list_subscribers() -> List[dict]:
+    return db.list_users()
