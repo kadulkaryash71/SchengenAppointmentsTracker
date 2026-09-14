@@ -9,6 +9,10 @@ from pathlib import Path
 import logging
 from dotenv import load_dotenv
 import time
+
+from api.db import get_mailing_list
+
+
 load_dotenv()
 
 
@@ -280,15 +284,21 @@ def _run_slot_check():
         to_raw = os.getenv("EMAIL_TO", "")
         to_list = [addr.strip() for addr in to_raw.split(",") if addr.strip()]
 
+        # TODO: Get active users from db
         bcc_raw = os.getenv("EMAIL_BCC", "")
         bcc_list = [addr.strip() for addr in bcc_raw.split(",") if addr.strip()]
 
+        bcc_list_db = get_mailing_list()
+
+        bcc_complete_list = list(set(bcc_list + bcc_list_db))
+        print(f"bcc_complete_list: {bcc_complete_list}")
+
         if not to_list:
-            if not bcc_list:
+            if not bcc_complete_list:
                 raise RuntimeError(
                     "No recipients configured. Set EMAIL_TO or EMAIL_BCC."
                 )
-            to_list.append(bcc_list.pop(0))
+            to_list.append(bcc_complete_list.pop(0))
 
         send_email(
             subject="Schengen appointment slots available",
@@ -299,7 +309,7 @@ def _run_slot_check():
             smtp_password=os.environ["SMTP_PASSWORD"],
             sender=os.environ["EMAIL_FROM"],
             to_recipients=to_list,
-            bcc_recipients=bcc_list,
+            bcc_recipients=bcc_complete_list,
         )
         logging.info("Email sent")
     else:

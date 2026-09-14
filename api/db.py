@@ -48,3 +48,6 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
 def list_users() -> List[dict]:
     return list(users_collection.find())
+
+def get_mailing_list() -> List[str]:
+    return [user["email"] for user in users_collection.find({}, {"email": 1, "_id": 0})]
