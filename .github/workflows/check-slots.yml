@@ -17,15 +17,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
       - name: Debug versions
         run: |
           python --version
           pip show pymongo dnspython
           openssl version
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
+          
       - name: Ensure state directory exists
         run: mkdir -p .state
 
