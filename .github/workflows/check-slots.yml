@@ -26,6 +26,9 @@ jobs:
       - name: Write .env
         run: |
           cat > .env <<EOF
+          DB_URI=${{ secrets.DB_URI }}
+          DB_NAME=${{ vars.DB_NAME }}
+          DB_USER_COLLECTION=${{ vars.DB_USER_COLLECTION }}
           CITY_SLUG=${{ secrets.CITY_SLUG }}
           VISA_TYPE=${{ secrets.VISA_TYPE }}
           TARGET_URL=${{ secrets.TARGET_URL }}

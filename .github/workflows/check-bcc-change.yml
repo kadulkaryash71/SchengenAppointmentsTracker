@@ -23,6 +23,9 @@ jobs:
       - name: Write .env
         run: |
           cat > .env <<EOF
+          DB_URI=${{ secrets.DB_URI }}
+          DB_NAME=${{ vars.DB_NAME }}
+          DB_USER_COLLECTION=${{ vars.DB_USER_COLLECTION }}
           SMTP_HOST=${{ secrets.SMTP_HOST }}
           SMTP_PORT=${{ secrets.SMTP_PORT }}
           SMTP_USER=${{ secrets.SMTP_USER }}

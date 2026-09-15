@@ -1,0 +1,10 @@
+.git
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.state/
+scheduler.log
+last_seen.json
+last_bcc.json
