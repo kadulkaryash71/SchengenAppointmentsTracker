@@ -382,6 +382,29 @@
             color: var(--danger);
         }
 
+        .coffee-banner {
+            display: block;
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: rgba(245, 166, 35, 0.08);
+            border: 1px solid var(--amber-dim);
+            border-radius: 7px;
+            color: var(--amber);
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.15s ease;
+        }
+
+        .coffee-banner:hover {
+            background: rgba(245, 166, 35, 0.16);
+        }
+
+        .coffee-banner[hidden] {
+            display: none;
+        }
+
         footer {
             max-width: 640px;
             margin: 32px auto 0;

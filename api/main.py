@@ -25,7 +25,7 @@ app.add_middleware(
 app.mount("/pages/assets", StaticFiles(directory=PAGES_DIR / "assets"), name="page-assets")
 
 
-@app.get("/index", response_class=HTMLResponse)
+@app.get("/subscribe", response_class=HTMLResponse)
 def render_index():
     return (PAGES_DIR / "index.html").read_text(encoding="utf-8")
 

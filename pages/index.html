@@ -83,6 +83,10 @@
 
                 <button type="submit" id="submit-btn">Notify me</button>
                 <p id="status-msg" role="status"></p>
+                <!-- TODO: replace # with your Ko-fi link -->
+                <a id="coffee-banner" class="coffee-banner" href="https://buymeacoffee.com/kadulkaryash71" target="_blank" rel="noopener" hidden>
+                    ☕ Enjoying the alerts? Buy me a coffee on Ko-fi
+                </a>
             </form>
         </section>
 
@@ -151,6 +155,7 @@
                 if (!res.ok) throw new Error('Request failed');
                 statusMsg.textContent = "🎉 You're on the list — we'll email you the moment a slot opens.";
                 statusMsg.className = 'success';
+                document.getElementById('coffee-banner').hidden = false;
                 form.reset();
             } catch (err) {
                 statusMsg.textContent = "Couldn't reach the sign-up service. You are possibly already subscribed.";
