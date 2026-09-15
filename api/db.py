@@ -9,8 +9,8 @@ from pymongo import MongoClient
 load_dotenv()  # Load environment variables from .env file
 
 client = MongoClient(os.getenv("DB_URI", "mongodb://localhost:27017/"))
-db = client["schengen_slot_bot"]
-users_collection = db["users"]
+db = client[os.getenv("DB_NAME", "schengen_slot_bot")]
+users_collection = db[os.getenv("DB_USER_COLLECTION", "users")]
 users_collection.create_index("email", unique=True)
 
 
