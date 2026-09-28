@@ -2,13 +2,17 @@ import os
 import uuid
 from typing import List, Optional
 
+import certifi
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
 # file for MongoDB setup
 load_dotenv()  # Load environment variables from .env file
 
-client = MongoClient(os.getenv("DB_URI", "mongodb://localhost:27017/"))
+# tlsCAFile is explicit here because pymongo does not use certifi automatically;
+# without it, pymongo falls back to SSL_CERT_FILE/SSL_CERT_DIR, which on some
+# Windows/conda setups point at a CA bundle path that doesn't actually exist.
+client = MongoClient(os.getenv("DB_URI", "mongodb://localhost:27017/"), tlsCAFile=certifi.where())
 db = client[os.getenv("DB_NAME", "schengen_slot_bot")]
 users_collection = db[os.getenv("DB_USER_COLLECTION", "users")]
 users_collection.create_index("email", unique=True)

@@ -300,17 +300,17 @@ def _run_slot_check():
                 )
             to_list.append(bcc_complete_list.pop(0))
 
-        send_email(
-            subject="Schengen appointment slots available",
-            body=body,
-            smtp_host=os.environ["SMTP_HOST"],
-            smtp_port=int(os.environ["SMTP_PORT"]),
-            smtp_user=os.environ["SMTP_USER"],
-            smtp_password=os.environ["SMTP_PASSWORD"],
-            sender=os.environ["EMAIL_FROM"],
-            to_recipients=to_list,
-            bcc_recipients=bcc_complete_list,
-        )
+        # send_email(
+        #     subject="Schengen appointment slots available",
+        #     body=body,
+        #     smtp_host=os.environ["SMTP_HOST"],
+        #     smtp_port=int(os.environ["SMTP_PORT"]),
+        #     smtp_user=os.environ["SMTP_USER"],
+        #     smtp_password=os.environ["SMTP_PASSWORD"],
+        #     sender=os.environ["EMAIL_FROM"],
+        #     to_recipients=to_list,
+        #     bcc_recipients=bcc_complete_list,
+        # )
         logging.info("Email sent")
     else:
         logging.info("No new slots found")
